@@ -1,0 +1,21 @@
+image:
+  name: ritse/swen344db:latest
+
+services:
+  - postgres:11
+
+variables:
+  POSTGRES_DB: swen344DB
+  POSTGRES_USER: swen344CIUser
+  POSTGRES_PASSWORD: bubbles9874
+
+before_script:
+  - pip install -r requirements.txt
+  - cp config/gitlab-credentials.yml config/db.yml
+
+testrunner:
+  script:
+    - echo "hello class"
+    - python --version
+    - python -m unittest
+  stage: test
