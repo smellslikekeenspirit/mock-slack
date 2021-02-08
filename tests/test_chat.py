@@ -10,8 +10,8 @@ class TestChat(unittest.TestCase):
         conn = connect()
         cur = conn.cursor()
         rebuild_tables()
-        cur.execute('SELECT * FROM example_table')
-        self.assertEqual([], cur.fetchall(), "no rows in example_table")
+        cur.execute('SELECT * FROM users')
+        self.assertEqual([], cur.fetchall(), "no rows in users")
         conn.close()
 
     def test_rebuild_tables_is_idempotent(self):
@@ -53,8 +53,6 @@ class TestChat(unittest.TestCase):
         self.assertEqual(2, len(cur.fetchall()), "two rows in messages table")
 
     def test_get_by_phone_number(self):
-        """Test the contact information"""
-        print("Test the contact information")
         conn = connect()
         cur = conn.cursor()
         add_users = """
