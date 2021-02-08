@@ -27,6 +27,8 @@ class TestChat(unittest.TestCase):
     def test_add_users(self):
         conn = connect()
         cur = conn.cursor()
+        # check why this is necessary in CI
+        rebuild_tables()
         add_users = """
                 INSERT INTO users(user_id, name, phone_number, email) VALUES
                     (1, 'Prionti', 5855689678, 'pdn3628@rit.edu'),
@@ -41,6 +43,7 @@ class TestChat(unittest.TestCase):
     def test_add_messages(self):
         conn = connect()
         cur = conn.cursor()
+        rebuild_tables()
         add_messages = """
                 INSERT INTO messages(message_id, sender_user_id, receiver_user_id, message, time_sent) VALUES
                     (1, 1, 2, 'How are you?', '2021-02-12 11:00:00'),
