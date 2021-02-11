@@ -40,7 +40,7 @@ def rebuild_tables():
     conn.commit()
     conn.close()
 
-
+'''
 def create_user(user_id: int, name: str, phone_number: int, email: str) -> None:
     """
     Creates a user
@@ -73,7 +73,7 @@ def create_message(message_id: int, sender_user_id: int, receiver_user_id: int, 
     cur.execute(f'INSERT INTO users(message_id, sender_id, receiver_id, time_sent, message, is_read)'
                 f'VALUES (\'{message_id}\', \'{sender_user_id}\', '
                 f'\'{receiver_user_id}\', \'{message}\', \'{dt.now()}\')')
-
+'''
 
 def populate_tables():
     conn = connect()
