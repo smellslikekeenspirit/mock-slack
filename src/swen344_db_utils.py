@@ -2,6 +2,7 @@ import psycopg2
 import yaml
 import os
 
+
 def connect():
     config = {}
     yml_path = os.path.join(os.path.dirname(__file__), '../config/db.yml')
@@ -13,6 +14,7 @@ def connect():
                             host=config['host'],
                             port=config['port'])
 
+
 def exec_sql_file(path):
     full_path = os.path.join(os.path.dirname(__file__), f'../../{path}')
     conn = connect()
@@ -22,6 +24,7 @@ def exec_sql_file(path):
     conn.commit()
     conn.close()
 
+
 def exec_get_one(sql, args={}):
     conn = connect()
     cur = conn.cursor()
@@ -29,6 +32,7 @@ def exec_get_one(sql, args={}):
     one = cur.fetchone()
     conn.close()
     return one
+
 
 def exec_get_all(sql, args={}):
     conn = connect()
@@ -38,6 +42,7 @@ def exec_get_all(sql, args={}):
     list_of_tuples = cur.fetchall()
     conn.close()
     return list_of_tuples
+
 
 def exec_commit(sql, args={}):
     conn = connect()
