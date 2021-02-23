@@ -114,7 +114,7 @@ class TestChat(unittest.TestCase):
     def test_whos_on_first(self):
         print("Test parsing of CSV file")
         populate_tables_db1()
-        rebuild_messages()
+        rebuild_direct_messages()
         read_csv('../data/whos_on_first.csv')
         all_unread_messages = exec_get_all('SELECT message_id FROM messages WHERE is_read = FALSE')
         self.assertTrue(len(all_unread_messages) == 184, "184 unread messages should have been read in from the csv")

@@ -9,16 +9,39 @@ from src.swen344_db_utils import connect, exec_get_all, exec_commit
 def rebuild_tables():
     conn = connect()
     cur = conn.cursor()
-
-    drop_example = """
-            DROP TABLE IF EXISTS example_table
+    drop_users = """
+            DROP TABLE IF EXISTS users
+        """
+    drop_communities = """
+            DROP TABLE IF EXISTS communities
+        """
+    drop_memberships = """
+            DROP TABLE IF EXISTS memberships
+        """
+    drop_channels = """
+            DROP TABLE IF EXISTS channels
+        """
+    drop_channel_posts = """
+            DROP TABLE IF EXISTS channel_posts
+        """
+    drop_unread_posts = """
+            DROP TABLE IF EXISTS unread_posts
+        """
+    drop_mentions = """
+            DROP TABLE IF EXISTS mentions
+        """
+    drop_direct_messages = """
+            DROP TABLE IF EXISTS direct_messages
+        """
+    drop_suspensions = """
+            DROP TABLE IF EXISTS suspensions
         """
     drop_users = """
-        DROP TABLE IF EXISTS users
-    """
+            DROP TABLE IF EXISTS users
+        """
     drop_messages = """
-        DROP TABLE IF EXISTS messages
-    """
+           DROP TABLE IF EXISTS messages
+        """
     create_schema = """
         CREATE TABLE users(
             user_id              VARCHAR(30) PRIMARY KEY NOT NULL,
@@ -31,7 +54,7 @@ def rebuild_tables():
             suspended_till       TIMESTAMP,
             UNIQUE(email)
         );
-        CREATE TABLE messages(
+        CREATE TABLE direct_messages(
             message_id          SERIAL PRIMARY KEY NOT NULL,
             sender_id           VARCHAR(30) NOT NULL,
             receiver_id         VARCHAR(30) NOT NULL,
@@ -39,8 +62,45 @@ def rebuild_tables():
             message             TEXT NOT NULL,
             is_read             BOOLEAN DEFAULT FALSE
         );
+        CREATE TABLE communities(
+            name     VARCHAR(40) PRIMARY KEY NOT NULL
+        );
+        CREATE TABLE memberships(
+            user_id        VARCHAR(30) NOT NULL,
+            community_name VARCHAR(40) NOT NULL,
+            PRIMARY KEY(user_id, community_name)
+        );
+        CREATE TABLE unread_posts(
+            user_id      VARCHAR(30) NOT NULL,
+            post_id      VARCHAR(40) NOT NULL,
+            PRIMARY KEY(user_id, post_id)
+        );
+        CREATE TABLE channels(
+            id             SERIAL PRIMARY KEY,
+            name           VARCHAR(40) NOT NULL,
+            community_name VARCHAR(40) NOT NULL,
+            UNIQUE(name, community_name)
+        );
+        CREATE TABLE channel_posts(
+            id           SERIAL PRIMARY KEY NOT NULL,
+            channel_id   INT NOT NULL,
+            text         TEXT NOT NULL,
+            user_id      VARCHAR(30) NOT NULL,
+            time_sent    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE mentions(
+            user_id      VARCHAR(30) NOT NULL,
+            post_id      VARCHAR(40) NOT NULL,
+            PRIMARY KEY(user_id, post_id)
+        );
+        CREATE TABLE suspensions(
+            user_id         VARCHAR(30) NOT NULL,
+            suspended_since TIMESTAMP DEFAULT NULL,
+            suspended_till  TIMESTAMP DEFAULT NULL,
+            community_name  VARCHAR(40) NOT NULL,
+            PRIMARY KEY(user_id, community_name)
+        ); 
     """
-    cur.execute(drop_example)
     cur.execute(drop_users)
     cur.execute(drop_messages)
     cur.execute(create_schema)
@@ -48,28 +108,24 @@ def rebuild_tables():
     conn.close()
 
 
-def rebuild_messages():
-    """
-    rebuild new messages table
-    """
+def rebuild_direct_messages():
     conn = connect()
     cur = conn.cursor()
-    drop_messages = """
-        DROP TABLE IF EXISTS messages
-    """
-    create_messages = """
-        CREATE TABLE messages(
-            message_id          SERIAL PRIMARY KEY NOT NULL,
-            sender_id           VARCHAR(30) NOT NULL,
-            receiver_id         VARCHAR(30) NOT NULL,
-            time_sent           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            message             TEXT NOT NULL,
-            is_read             BOOLEAN DEFAULT FALSE
-        )
-    """
-
-    cur.execute(drop_messages)
-    cur.execute(create_messages)
+    drop_direct_messages = """
+            DROP TABLE IF EXISTS direct_messages
+        """
+    create_direct_messages = """
+            CREATE TABLE direct_messages(
+                message_id          SERIAL PRIMARY KEY NOT NULL,
+                sender_id           VARCHAR(30) NOT NULL,
+                receiver_id         VARCHAR(30) NOT NULL,
+                time_sent           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                message             TEXT NOT NULL,
+                is_read             BOOLEAN DEFAULT FALSE
+            );
+        """
+    cur.execute(drop_direct_messages)
+    cur.execute(create_direct_messages)
     conn.commit()
     conn.close()
 
@@ -197,7 +253,7 @@ def read_message(message_id, receiver_id):
     :return: text content
     """
     texts = exec_get_all('SELECT message FROM messages WHERE message_id = %s AND receiver_id = %s',
-                             (message_id, receiver_id))
+                         (message_id, receiver_id))
     if len(texts) == 1:
         exec_commit('UPDATE messages SET is_read = TRUE WHERE message_id = %s', (message_id,))
         return texts[0][0]
@@ -330,4 +386,3 @@ def populate_tables_db2():
     create_message(1, 'Bob12345', 'DrMarvin', '1991-05-18 00:00:00', 'I\'m doing the work, I\'m baby-stepping')
     change_username('Bob12345', 'BabySteps2Door', '1991-05-19 00:00:00')
     change_username('BabySteps2Door', 'BabySteps2Elevator', '1991-05-20 00:00:00')
-
