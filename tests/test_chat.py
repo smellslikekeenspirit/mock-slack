@@ -43,7 +43,7 @@ class TestChat(unittest.TestCase):
         cur = conn.cursor()
         populate_tables_db1()
         cur.execute(
-            'SELECT direct_messages.message_id FROM direct_messages INNER JOIN users'
+            'SELECT direct_messages.message_id FROM direct_messages INNER JOIN users '
             'ON users.user_id = direct_messages.sender_id WHERE '
             'EXTRACT( '
             'year FROM direct_messages.time_sent) > 1990 AND users.name = \'Costello\'')
