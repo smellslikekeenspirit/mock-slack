@@ -36,12 +36,6 @@ def rebuild_tables():
     drop_suspensions = """
             DROP TABLE IF EXISTS suspensions
         """
-    drop_users = """
-            DROP TABLE IF EXISTS users
-        """
-    drop_messages = """
-           DROP TABLE IF EXISTS messages
-        """
     create_schema = """
         CREATE TABLE users(
             user_id              VARCHAR(30) PRIMARY KEY NOT NULL,
@@ -102,7 +96,14 @@ def rebuild_tables():
         ); 
     """
     cur.execute(drop_users)
-    cur.execute(drop_messages)
+    cur.execute(drop_direct_messages)
+    cur.execute(drop_communities)
+    cur.execute(drop_channels)
+    cur.execute(drop_channel_posts)
+    cur.execute(drop_memberships)
+    cur.execute(drop_unread_posts)
+    cur.execute(drop_mentions)
+    cur.execute(drop_suspensions)
     cur.execute(create_schema)
     conn.commit()
     conn.close()
