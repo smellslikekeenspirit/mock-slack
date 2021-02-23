@@ -240,7 +240,7 @@ def create_message(message_id: int, sender_id: str,
             return sender_email + " is currently suspended until " + suspended_end.strftime("%Y/%m/%d %H:%M:%S")
 
     # If no time was given it will default to the current time
-    exec_commit(f'INSERT INTO messages(message_id, sender_id, receiver_id, time_sent, message)'
+    exec_commit(f'INSERT INTO direct_messages(message_id, sender_id, receiver_id, time_sent, message)'
                 f' VALUES (%s,%s,%s,%s,%s)',
                 (message_id, sender_id, receiver_id, init_time, message))
     return "Message sent successfully"
@@ -253,10 +253,10 @@ def read_message(message_id, receiver_id):
     :param receiver_id:
     :return: text content
     """
-    texts = exec_get_all('SELECT message FROM messages WHERE message_id = %s AND receiver_id = %s',
+    texts = exec_get_all('SELECT message FROM direct_messages WHERE message_id = %s AND receiver_id = %s',
                          (message_id, receiver_id))
     if len(texts) == 1:
-        exec_commit('UPDATE messages SET is_read = TRUE WHERE message_id = %s', (message_id,))
+        exec_commit('UPDATE direct_messages SET is_read = TRUE WHERE message_id = %s', (message_id,))
         return texts[0][0]
 
 
@@ -268,7 +268,7 @@ def get_unread_messages(receiver_id):
     """
     if not user_exists(get_email_by_id(receiver_id)):
         return []
-    unreads = exec_get_all('SELECT * FROM messages WHERE is_read = FALSE AND receiver_id = %s', (receiver_id,))
+    unreads = exec_get_all('SELECT * FROM direct_messages WHERE is_read = FALSE AND receiver_id = %s', (receiver_id,))
     return unreads
 
 
@@ -285,7 +285,7 @@ def get_messages_from(receiver_id, sender_id):
         return "User" + sender_email + "doesn't exist"
     if not user_exists(receiver_email):
         return "User" + receiver_email + "doesn't exist"
-    return exec_get_all('SELECT message FROM messages WHERE sender_id = %s AND receiver_id = %s',
+    return exec_get_all('SELECT message FROM direct_messages WHERE sender_id = %s AND receiver_id = %s',
                         (sender_id, receiver_id))
 
 
@@ -315,7 +315,7 @@ def resume_user(email):
 
 
 def get_last_message_id():
-    msg_id = exec_commit('SELECT message_id FROM messages ORDER BY message_id DESC LIMIT 1')
+    msg_id = exec_commit('SELECT message_id FROM direct_messages ORDER BY message_id DESC LIMIT 1')
     return msg_id
 
 
@@ -365,7 +365,7 @@ def populate_tables_db1():
                 """
     cur.execute(add_users)
     add_messages = """
-                    INSERT INTO messages(message_id, sender_id, receiver_id, time_sent, message, is_read) VALUES
+                    INSERT INTO direct_messages(message_id, sender_id, receiver_id, time_sent, message, is_read) VALUES
                         (1, 'Abbott1234', 'Costello1234', '2000-02-12 11:00:00', 'C! How are you?', TRUE),
                         (2, 'Costello1234', 'Abbott1234', '2000-02-12 12:00:40', 'Hey A! Fine. You?', TRUE),
                         (3, 'Moe1234', 'Larry1234', '1995-02-12 11:00:00', 'How are you Larry?', TRUE),
