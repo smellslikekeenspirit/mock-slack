@@ -94,23 +94,20 @@ class TestChat(unittest.TestCase):
         self.assertTrue(1 == reads, "Abbott has 1 read message")
         self.assertTrue(2 == unreads, "Abbott has 2 unread messages")
 
-    # If today is May 4, 2012, then Larry is suspended
-    # If today is February 29, 2000, Curly is not suspended
+
     def test_suspensions(self):
         """Test suspensions are correct"""
         print("Test that suspensions are in place correctly")
-        conn = connect()
-        cur = conn.cursor()
-        populate_tables_db1()
-        larry_date = datetime(2012, 5, 4)
-        curly_date = datetime(2000, 2, 29)
-        cur.execute('SELECT suspended_since, suspended_till FROM users WHERE name = \'Larry\'')
-        suspension_date = cur.fetchall()
-        self.assertTrue((suspension_date[0][0] < larry_date) and (larry_date < suspension_date[0][1]),
-                        "Larry should stay suspended on May 4 2012")
-        cur.execute('SELECT suspended_till FROM users WHERE name = \'Curly\'')
-        self.assertTrue(suspension_date[0][0] < curly_date, "Curly should not be suspended on February 29 2000")
-        conn.close()
+        populate_tables_db3()
+        add_user_to_community('lex12345', 'Metropolis')
+        suspend_user('lex12345', 'Metropolis', '2030-01-01 01:01:01', '2010-01-01 01:01:01')
+        post_to_channel('lex12345', 'DailyPlanet', 'Metropolis', "hi guys!")
+        post, numposts = get_unread_posts('clarknotsuperman')
+        self.assertTrue(numposts == 0, "No unread messages should have been found")
+        add_user_to_community('lex12345', 'Comedy')
+        post_to_channel('lex12345', 'Dialogs', 'Comedy', "hey!")
+        post, numposts = get_unread_posts('Moe1234')
+        self.assertTrue(numposts == 1, "1 unread messages should have been found")
 
     def test_whos_on_first(self):
         print("Test parsing of CSV file")
@@ -139,3 +136,18 @@ class TestChat(unittest.TestCase):
         read_message(message_id, 'DrMarvin')
         message_list = get_unread_messages('DrMarvin')
         self.assertTrue(len(message_list) == 0, "DrMarvin should have read his unread message")
+
+    def test_unread_posts(self):
+        populate_tables_db3()
+        add_user_to_community('lex12345', 'Metropolis')
+        post_to_channel('lex12345', 'DailyPlanet', 'Metropolis', "Hi guys!")
+        post, numposts = get_unread_posts('clarknotsuperman')
+        self.assertTrue(numposts == 1, "1 unread message should have been found")
+        post_to_channel('lex12345', 'DailyPlanet', 'Metropolis',
+                        "Hey @clarknotsuperman are you here?")
+        mentions, nummentions = get_mentions('clarknotsuperman')
+        print(mentions)
+        self.assertTrue(nummentions == 1, "1 mention should have been found")
+        post_to_channel('Moe1234', 'Dialogs', 'Comedy', "Hey @clarknotsuperman are you here?")
+        mentions, nummentions = get_mentions('clarknotsuperman')
+        self.assertTrue(nummentions == 1, "only 1 mention should have been found")
