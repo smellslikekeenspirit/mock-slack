@@ -33,7 +33,7 @@ class TestChat(unittest.TestCase):
         populate_tables_db1()
         cur.execute('SELECT * FROM users')
         self.assertEqual(5, len(cur.fetchall()), "There should be 5 rows in users table")
-        cur.execute('SELECT * FROM messages')
+        cur.execute('SELECT * FROM direct_messages')
         self.assertEqual(7, len(cur.fetchall()), "There should be 7 rows in messages table")
 
     # we can get all messages sent by a specific user
@@ -43,9 +43,10 @@ class TestChat(unittest.TestCase):
         cur = conn.cursor()
         populate_tables_db1()
         cur.execute(
-            'SELECT messages.message_id FROM messages INNER JOIN users ON users.user_id = messages.sender_id WHERE '
+            'SELECT direct_messages.message_id FROM direct_messages INNER JOIN users '
+            'ON users.user_id = direct_messages.sender_id WHERE '
             'EXTRACT( '
-            'year FROM messages.time_sent) > 1990 AND users.name = \'Costello\'')
+            'year FROM direct_messages.time_sent) > 1990 AND users.name = \'Costello\'')
         message_id_list = cur.fetchall()
         self.assertTrue(2 == len(message_id_list), "Costello sent 2 messages after 1990")
 
@@ -57,22 +58,22 @@ class TestChat(unittest.TestCase):
         cur = conn.cursor()
         populate_tables_db1()
         cur.execute(
-            'SELECT messages.message_id FROM messages WHERE messages.sender_id = \'Abbott1234\' '
-            'AND messages.receiver_id = \'Costello1234\'')
+            'SELECT direct_messages.message_id FROM direct_messages WHERE direct_messages.sender_id = \'Abbott1234\' '
+            'AND direct_messages.receiver_id = \'Costello1234\'')
         a_to_c = len(cur.fetchall())
         cur.execute(
-            'SELECT messages.message_id FROM messages WHERE messages.sender_id = \'Costello1234\' '
-            'AND messages.receiver_id = \'Abbott1234\'')
+            'SELECT direct_messages.message_id FROM direct_messages WHERE direct_messages.sender_id = \'Costello1234\' '
+            'AND direct_messages.receiver_id = \'Abbott1234\'')
         c_to_a = len(cur.fetchall())
         self.assertTrue(3 == a_to_c + c_to_a, "Abbott and Costello exchanged 3 messages")
         print("Test retrieval of all messages between two users given a timeframe")
         cur.execute(
-            'SELECT messages.message_id FROM messages WHERE messages.sender_id = \'Moe1234\' '
-            'AND messages.receiver_id = \'Larry1234\' AND EXTRACT(year FROM time_sent) = 1995')
+            'SELECT direct_messages.message_id FROM direct_messages WHERE direct_messages.sender_id = \'Moe1234\' '
+            'AND direct_messages.receiver_id = \'Larry1234\' AND EXTRACT(year FROM time_sent) = 1995')
         m_to_l = len(cur.fetchall())
         cur.execute(
-            'SELECT messages.message_id FROM messages WHERE messages.sender_id = \'Larry1234\' '
-            'AND messages.receiver_id = \'Moe1234\' AND EXTRACT(year FROM time_sent) = 1995')
+            'SELECT direct_messages.message_id FROM direct_messages WHERE direct_messages.sender_id = \'Larry1234\' '
+            'AND direct_messages.receiver_id = \'Moe1234\' AND EXTRACT(year FROM time_sent) = 1995')
         l_to_m = len(cur.fetchall())
         self.assertTrue(2 == m_to_l + l_to_m, "Moe and Larry exchanged 2 messages in 1995")
 
@@ -83,40 +84,36 @@ class TestChat(unittest.TestCase):
         cur = conn.cursor()
         populate_tables_db1()
         cur.execute(
-            'SELECT messages.message_id FROM messages WHERE messages.is_read = TRUE '
-            'AND messages.receiver_id = \'Abbott1234\'')
+            'SELECT direct_messages.message_id FROM direct_messages WHERE direct_messages.is_read = TRUE '
+            'AND direct_messages.receiver_id = \'Abbott1234\'')
         reads = len(cur.fetchall())
         cur.execute(
-            'SELECT messages.message_id FROM messages WHERE messages.is_read = FALSE '
-            'AND messages.receiver_id = \'Abbott1234\'')
+            'SELECT direct_messages.message_id FROM direct_messages WHERE direct_messages.is_read = FALSE '
+            'AND direct_messages.receiver_id = \'Abbott1234\'')
         unreads = len(cur.fetchall())
         self.assertTrue(1 == reads, "Abbott has 1 read message")
         self.assertTrue(2 == unreads, "Abbott has 2 unread messages")
 
-    # If today is May 4, 2012, then Larry is suspended
-    # If today is February 29, 2000, Curly is not suspended
     def test_suspensions(self):
         """Test suspensions are correct"""
         print("Test that suspensions are in place correctly")
-        conn = connect()
-        cur = conn.cursor()
-        populate_tables_db1()
-        larry_date = datetime(2012, 5, 4)
-        curly_date = datetime(2000, 2, 29)
-        cur.execute('SELECT suspended_since, suspended_till FROM users WHERE name = \'Larry\'')
-        suspension_date = cur.fetchall()
-        self.assertTrue((suspension_date[0][0] < larry_date) and (larry_date < suspension_date[0][1]),
-                        "Larry should stay suspended on May 4 2012")
-        cur.execute('SELECT suspended_till FROM users WHERE name = \'Curly\'')
-        self.assertTrue(suspension_date[0][0] < curly_date, "Curly should not be suspended on February 29 2000")
-        conn.close()
+        populate_tables_db3()
+        add_user_to_community('lex12345', 'Metropolis')
+        suspend_user('lex12345', 'Metropolis', '2030-01-01 01:01:01', '2010-01-01 01:01:01')
+        post_to_channel('lex12345', 'DailyPlanet', 'Metropolis', "hi guys!")
+        post, numposts = get_unread_posts('clarknotsuperman')
+        self.assertTrue(numposts == 0, "No unread messages should have been found")
+        add_user_to_community('lex12345', 'Comedy')
+        post_to_channel('lex12345', 'Dialogs', 'Comedy', "hey!")
+        post, numposts = get_unread_posts('Moe1234')
+        self.assertTrue(numposts == 1, "1 unread messages should have been found")
 
     def test_whos_on_first(self):
         print("Test parsing of CSV file")
         populate_tables_db1()
-        rebuild_messages()
+        rebuild_direct_messages()
         read_csv('data/whos_on_first.csv')
-        all_unread_messages = exec_get_all('SELECT message_id FROM messages WHERE is_read = FALSE')
+        all_unread_messages = exec_get_all('SELECT message_id FROM direct_messages WHERE is_read = FALSE')
         self.assertTrue(len(all_unread_messages) == 184, "184 unread messages should have been read in from the csv")
 
     def test_users_added(self):
@@ -138,3 +135,18 @@ class TestChat(unittest.TestCase):
         read_message(message_id, 'DrMarvin')
         message_list = get_unread_messages('DrMarvin')
         self.assertTrue(len(message_list) == 0, "DrMarvin should have read his unread message")
+
+    def test_unread_posts(self):
+        print("Test that posts are being sent and kept from being sent to channels correctly")
+        populate_tables_db3()
+        add_user_to_community('lex12345', 'Metropolis')
+        post_to_channel('lex12345', 'DailyPlanet', 'Metropolis', "Hi guys!")
+        post, numposts = get_unread_posts('clarknotsuperman')
+        self.assertTrue(numposts == 1, "1 unread message should have been found")
+        post_to_channel('lex12345', 'DailyPlanet', 'Metropolis',
+                        "Hey @clarknotsuperman are you here?")
+        mentions, nummentions = get_mentions('clarknotsuperman')
+        self.assertTrue(nummentions == 1, "1 mention should have been found")
+        post_to_channel('Moe1234', 'Dialogs', 'Comedy', "Hey @clarknotsuperman are you here?")
+        mentions, nummentions = get_mentions('clarknotsuperman')
+        self.assertTrue(nummentions == 1, "only 1 mention should have been found")

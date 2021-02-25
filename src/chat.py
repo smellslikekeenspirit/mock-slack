@@ -1,4 +1,5 @@
 import csv
+import string
 from datetime import datetime
 
 from dateutil.relativedelta import relativedelta
@@ -9,16 +10,33 @@ from src.swen344_db_utils import connect, exec_get_all, exec_commit
 def rebuild_tables():
     conn = connect()
     cur = conn.cursor()
-
-    drop_example = """
-            DROP TABLE IF EXISTS example_table
-        """
     drop_users = """
-        DROP TABLE IF EXISTS users
-    """
-    drop_messages = """
-        DROP TABLE IF EXISTS messages
-    """
+            DROP TABLE IF EXISTS users
+        """
+    drop_communities = """
+            DROP TABLE IF EXISTS communities
+        """
+    drop_memberships = """
+            DROP TABLE IF EXISTS memberships
+        """
+    drop_channels = """
+            DROP TABLE IF EXISTS channels
+        """
+    drop_channel_posts = """
+            DROP TABLE IF EXISTS channel_posts
+        """
+    drop_unread_posts = """
+            DROP TABLE IF EXISTS unread_posts
+        """
+    drop_mentions = """
+            DROP TABLE IF EXISTS mentions
+        """
+    drop_direct_messages = """
+            DROP TABLE IF EXISTS direct_messages
+        """
+    drop_suspensions = """
+            DROP TABLE IF EXISTS suspensions
+        """
     create_schema = """
         CREATE TABLE users(
             user_id              VARCHAR(30) PRIMARY KEY NOT NULL,
@@ -31,7 +49,7 @@ def rebuild_tables():
             suspended_till       TIMESTAMP,
             UNIQUE(email)
         );
-        CREATE TABLE messages(
+        CREATE TABLE direct_messages(
             message_id          SERIAL PRIMARY KEY NOT NULL,
             sender_id           VARCHAR(30) NOT NULL,
             receiver_id         VARCHAR(30) NOT NULL,
@@ -39,44 +57,84 @@ def rebuild_tables():
             message             TEXT NOT NULL,
             is_read             BOOLEAN DEFAULT FALSE
         );
+        CREATE TABLE communities(
+            name     VARCHAR(40) PRIMARY KEY NOT NULL
+        );
+        CREATE TABLE memberships(
+            user_id        VARCHAR(30) NOT NULL,
+            community_name VARCHAR(40) NOT NULL,
+            PRIMARY KEY(user_id, community_name)
+        );
+        CREATE TABLE unread_posts(
+            user_id      VARCHAR(30) NOT NULL,
+            post_id      VARCHAR(40) NOT NULL,
+            PRIMARY KEY(user_id, post_id)
+        );
+        CREATE TABLE channels(
+            id             SERIAL PRIMARY KEY,
+            name           VARCHAR(40) NOT NULL,
+            community_name VARCHAR(40) NOT NULL,
+            UNIQUE(name, community_name)
+        );
+        CREATE TABLE channel_posts(
+            id           SERIAL PRIMARY KEY NOT NULL,
+            channel_id   INT NOT NULL,
+            text         TEXT NOT NULL,
+            user_id      VARCHAR(30) NOT NULL,
+            time_sent    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE mentions(
+            user_id      VARCHAR(30) NOT NULL,
+            post_id      VARCHAR(40) NOT NULL,
+            PRIMARY KEY(user_id, post_id)
+        );
+        CREATE TABLE suspensions(
+            user_id         VARCHAR(30) NOT NULL,
+            suspended_since TIMESTAMP DEFAULT NULL,
+            suspended_till  TIMESTAMP DEFAULT NULL,
+            community_name  VARCHAR(40) NOT NULL,
+            PRIMARY KEY(user_id, community_name)
+        ); 
     """
-    cur.execute(drop_example)
     cur.execute(drop_users)
-    cur.execute(drop_messages)
+    cur.execute(drop_direct_messages)
+    cur.execute(drop_communities)
+    cur.execute(drop_channels)
+    cur.execute(drop_channel_posts)
+    cur.execute(drop_memberships)
+    cur.execute(drop_unread_posts)
+    cur.execute(drop_mentions)
+    cur.execute(drop_suspensions)
     cur.execute(create_schema)
     conn.commit()
     conn.close()
 
 
-def rebuild_messages():
-    """
-    rebuild new messages table
-    """
+def rebuild_direct_messages():
     conn = connect()
     cur = conn.cursor()
-    drop_messages = """
-        DROP TABLE IF EXISTS messages
-    """
-    create_messages = """
-        CREATE TABLE messages(
-            message_id          SERIAL PRIMARY KEY NOT NULL,
-            sender_id           VARCHAR(30) NOT NULL,
-            receiver_id         VARCHAR(30) NOT NULL,
-            time_sent           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            message             TEXT NOT NULL,
-            is_read             BOOLEAN DEFAULT FALSE
-        )
-    """
-
-    cur.execute(drop_messages)
-    cur.execute(create_messages)
+    drop_direct_messages = """
+            DROP TABLE IF EXISTS direct_messages
+        """
+    create_direct_messages = """
+            CREATE TABLE direct_messages(
+                message_id          SERIAL PRIMARY KEY NOT NULL,
+                sender_id           VARCHAR(30) NOT NULL,
+                receiver_id         VARCHAR(30) NOT NULL,
+                time_sent           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                message             TEXT NOT NULL,
+                is_read             BOOLEAN DEFAULT FALSE
+            );
+        """
+    cur.execute(drop_direct_messages)
+    cur.execute(create_direct_messages)
     conn.commit()
     conn.close()
 
 
 def user_exists(email):
     """
-
+    checks if a user exists in the system by email
     :param email:
     :return:
     """
@@ -103,9 +161,6 @@ def create_user(user_id: str, name: str, phone_number: int, email: str, userid_s
     :param suspended_since:
     :return: None
     """
-    conn = connect()
-    cur = conn.cursor()
-
     if user_exists(email):
         return "User already exists"
 
@@ -152,8 +207,114 @@ def change_username(user_id, new_name, change_time=None):
     return "User changed their username in the last 6 months"
 
 
-def create_message(message_id: int, sender_id: str,
-                   receiver_id: str, time_sent: None, message: str) -> str:
+def community_exists(community_name):
+    matching_communities = exec_get_all('SELECT name FROM communities WHERE name = %s', (community_name,))
+    return len(matching_communities) == 1
+
+
+def channel_exists(channel_name, community_name):
+    matching_channels = exec_get_all('SELECT id FROM channels WHERE name = %s AND community_name = %s',
+                                     (channel_name, community_name))
+    return len(matching_channels) == 1
+
+
+def add_channel(channel, community_name):
+    if channel_exists(channel, community_name):
+        return channel + " exists"
+
+    if not community_exists(community_name):
+        return "The community doesn't exist"
+
+    exec_commit('INSERT INTO channels (name,community_name) VALUES (%s,%s)',
+                (channel, community_name))
+    return channel + " was added to " + community_name
+
+
+def add_community(community_name, channels=[]):
+    """
+    This function will add a new community and a list of channels to it if specified
+    """
+    if community_exists(community_name):
+        return "The community already exists"
+
+    exec_commit('INSERT INTO communities (name) VALUES (%s)',
+                (community_name,))
+    print("Creating community " + community_name)
+    for channel in channels:
+        print(add_channel(channel, community_name) + " ")
+    return community_name + " was added "
+
+
+def add_user_to_community(user_id, community):
+    """
+    This will add a user to a community
+    """
+    if not community_exists(community):
+        return "The community doesn't exist"
+    if not user_exists(get_email_by_id(user_id)):
+        return "The user doesn't exist"
+    exec_commit('INSERT INTO memberships (user_id,community_name) VALUES (%s,%s)',
+                (user_id, community))
+    return user_id + " is now a member of " + community
+
+
+def get_users_in_community(community):
+    """
+    This function will get the list of all users that are in the given channel
+    """
+    if not community_exists(community):
+        return []
+
+    user_list = exec_get_all('SELECT user_id FROM memberships WHERE community_name = %s', (community,))
+
+    return [user[0] for user in user_list]
+
+
+def post_to_channel(poster_id, channel, community, message,
+                    time_sent=datetime.now().strftime("%Y-%m-%d %H:%M:%S")):
+    """
+    This function will let a user send a message on a channel
+    """
+    if not (channel_exists(channel, community)):
+        return "The channel doesn't exist"
+    community_ids = get_users_in_community(community)
+    if not poster_id in community_ids:
+        return "User is not a part of the community"
+    if is_suspended(poster_id, channel, time_sent):
+        return "User is suspended"
+    mentioned_users = []
+    split_message = message.split("@")
+
+    for i in range(len(split_message)):
+        if i % 2 == 1:
+            first_word_after_symbol = split_message[i].translate(string.punctuation).split()[0]
+            for user_id in community_ids:
+                if user_id == first_word_after_symbol:
+                    mentioned_users.append(user_id)
+                    break
+    mentioned_users = list(set(mentioned_users))
+    community_ids.remove(poster_id)
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute('SELECT id FROM channels WHERE community_name = %s AND name = %s', (community, channel))
+    channel_id = cur.fetchall()[0][0]
+    cur.execute('INSERT INTO channel_posts (channel_id, text, user_id, time_sent) VALUES (%s,%s,%s,%s) RETURNING id',
+                (channel_id, message, poster_id, time_sent))
+    post_id = cur.fetchall()[0][0]
+    for user_id in community_ids:
+        cur.execute('INSERT INTO unread_posts (user_id,post_id) VALUES (%s,%s)',
+                    (user_id, post_id))
+
+    for user_id in mentioned_users:
+        cur.execute('INSERT INTO mentions (user_id,post_id) VALUES (%s,%s)',
+                    (user_id, post_id))
+    conn.commit()
+    conn.close()
+    return "Message sent to channel"
+
+
+def create_direct_message(message_id: int, sender_id: str,
+                          receiver_id: str, time_sent: None, message: str) -> str:
     """
     adds a message to db
     :param message_id: message id
@@ -176,14 +337,14 @@ def create_message(message_id: int, sender_id: str,
 
     suspension_dates = exec_get_all('SELECT suspended_since, suspended_till FROM users WHERE email = %s',
                                     (sender_email,))
-    suspended_start = suspension_dates[0][0]
-    suspended_end = suspension_dates[0][1]
-    if suspended_start and suspended_end:
-        if suspended_start < init_time < suspended_end:
-            return sender_email + " is currently suspended until " + suspended_end.strftime("%Y/%m/%d %H:%M:%S")
+    suspended_since = suspension_dates[0][0]
+    suspended_till = suspension_dates[0][1]
+    if suspended_since and suspended_till:
+        if suspended_since < init_time < suspended_till:
+            return sender_email + " is currently suspended until " + suspended_till.strftime("%Y/%m/%d %H:%M:%S")
 
     # If no time was given it will default to the current time
-    exec_commit(f'INSERT INTO messages(message_id, sender_id, receiver_id, time_sent, message)'
+    exec_commit(f'INSERT INTO direct_messages(message_id, sender_id, receiver_id, time_sent, message)'
                 f' VALUES (%s,%s,%s,%s,%s)',
                 (message_id, sender_id, receiver_id, init_time, message))
     return "Message sent successfully"
@@ -196,10 +357,10 @@ def read_message(message_id, receiver_id):
     :param receiver_id:
     :return: text content
     """
-    texts = exec_get_all('SELECT message FROM messages WHERE message_id = %s AND receiver_id = %s',
-                             (message_id, receiver_id))
+    texts = exec_get_all('SELECT message FROM direct_messages WHERE message_id = %s AND receiver_id = %s',
+                         (message_id, receiver_id))
     if len(texts) == 1:
-        exec_commit('UPDATE messages SET is_read = TRUE WHERE message_id = %s', (message_id,))
+        exec_commit('UPDATE direct_messages SET is_read = TRUE WHERE message_id = %s', (message_id,))
         return texts[0][0]
 
 
@@ -211,13 +372,13 @@ def get_unread_messages(receiver_id):
     """
     if not user_exists(get_email_by_id(receiver_id)):
         return []
-    unreads = exec_get_all('SELECT * FROM messages WHERE is_read = FALSE AND receiver_id = %s', (receiver_id,))
+    unreads = exec_get_all('SELECT * FROM direct_messages WHERE is_read = FALSE AND receiver_id = %s', (receiver_id,))
     return unreads
 
 
 def get_messages_from(receiver_id, sender_id):
     """
-
+    this will return messages between two given people
     :param receiver_id:
     :param sender_id:
     :return:
@@ -228,37 +389,103 @@ def get_messages_from(receiver_id, sender_id):
         return "User" + sender_email + "doesn't exist"
     if not user_exists(receiver_email):
         return "User" + receiver_email + "doesn't exist"
-    return exec_get_all('SELECT message FROM messages WHERE sender_id = %s AND receiver_id = %s',
+    return exec_get_all('SELECT message FROM direct_messages WHERE sender_id = %s AND receiver_id = %s',
                         (sender_id, receiver_id))
 
 
-def suspend_user(email, end_suspension, start_suspension=None):
+def get_unread_posts(user_id):
     """
-    suspends a user
-    :param email:
+    This function will return the list of all unread posts
+    """
+    if not user_exists(get_email_by_id(user_id)):
+        return [], 0
+    unread_list = exec_get_all('SELECT post_id FROM unread_posts WHERE user_id = %s', (user_id,))
+    return [message_id[0] for message_id in unread_list], len(unread_list)
+
+
+def get_mentions(user_id):
+    """
+    This will get a list of all unread post and return the list and the number of them
+    """
+    if not user_exists(get_email_by_id(user_id)):
+        return [], 0
+    mention_list = exec_get_all('SELECT * FROM mentions WHERE user_id = %s', (user_id,))
+    return [message_id[0] for message_id in mention_list], len(mention_list)
+
+
+def suspend_user(user_id, community_name, end_suspension, start_suspension=None):
+    """
+    suspends a user from a commmunity
+    :param user_id:
+    :param community_name:
     :param end_suspension:
     :param start_suspension:
     :return:
     """
+    if not user_exists(get_email_by_id(user_id)):
+        return "User doesn't exist"
+    if not community_exists(community_name):
+        return "Community does not exist"
+
     if not start_suspension:
-        start_suspension = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-    exec_commit('UPDATE users SET suspended_since = %s AND suspended_till = %s WHERE email = %s',
-                (start_suspension, end_suspension, email))
-    return email + " is suspended from " + start_suspension + " until " + end_suspension
+        start_suspension = datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    suspension_list = exec_commit('SELECT user_id FROM suspensions WHERE user_id = %s AND community_name = %s',
+                                  (user_id, community_name))
+    if not suspension_list:
+        exec_commit('INSERT INTO suspensions (user_id, suspended_since, suspended_till, community_name) VALUES(%s, '
+                    '%s, %s, %s)', (user_id, start_suspension, end_suspension, community_name))
+    else:
+        exec_commit('UPDATE suspensions SET suspended_since = %s AND suspended_till = %s WHERE user_id = %s AND '
+                    'community_name = %s', (start_suspension, end_suspension, user_id, community_name))
+    return user_id + " is suspended from " + start_suspension + " until " + end_suspension + " on " + community_name
 
 
-def resume_user(email):
+def resume_user(user_id, community_name):
     """
     discontinues suspension for a user
-    :param email:
+    :param user_id:
     :return:
     """
-    exec_commit('UPDATE users SET suspended_since = NULL AND suspended_till = NULL WHERE email = %s', email)
-    return email + " is no longer suspended"
+    if not user_exists(get_email_by_id(user_id)):
+        return "User doesn't exist"
+    if not community_exists(community_name):
+        return "Community does not exist"
+    exec_commit(
+        'UPDATE suspensions SET suspended_since = NULL AND suspended_till = NULL'
+        ' WHERE user_id = %s AND community_name = %s',
+        (user_id, community_name))
+    return user_id + " is no longer suspended on " + community_name
+
+
+def is_suspended(email, channel_name, sending_time):
+    """
+    This will tell us if the user is suspended or not on the channel
+    """
+    sending_time = datetime.strptime(sending_time, '%Y-%m-%d %H:%M:%S')
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute('SELECT community_name FROM channels WHERE name = %s', (channel_name,))
+    community_name = cur.fetchall()[0][0]
+    cur.execute('SELECT suspended_since, suspended_till FROM suspensions WHERE user_id = %s AND community_name = %s',
+                (email, community_name))
+    suspension_dates = cur.fetchall()
+    conn.close()
+    if not suspension_dates:
+        return False
+    suspended_since = suspension_dates[0][0]
+    suspended_till = suspension_dates[0][1]
+    if suspended_since and suspended_till:
+        if suspended_since < sending_time < suspended_till:
+            return True
+    return False
 
 
 def get_last_message_id():
-    msg_id = exec_commit('SELECT message_id FROM messages ORDER BY message_id DESC LIMIT 1')
+    """
+    this will get us the last sent direct message on the app
+    :return:
+    """
+    msg_id = exec_commit('SELECT message_id FROM direct_messages ORDER BY message_id DESC LIMIT 1')
     return msg_id
 
 
@@ -282,9 +509,9 @@ def read_csv(filename):
             msg_id += 1
         for row in reader:
             if row[0] == 'Abbott':
-                create_message(msg_id, 'Abbott1234', 'Costello1234', None, row[1])
+                create_direct_message(msg_id, 'Abbott1234', 'Costello1234', None, row[1])
             else:
-                create_message(msg_id, 'Costello1234', 'Abbott1234', None, row[1])
+                create_direct_message(msg_id, 'Costello1234', 'Abbott1234', None, row[1])
             msg_id += 1
 
 
@@ -308,7 +535,7 @@ def populate_tables_db1():
                 """
     cur.execute(add_users)
     add_messages = """
-                    INSERT INTO messages(message_id, sender_id, receiver_id, time_sent, message, is_read) VALUES
+                    INSERT INTO direct_messages(message_id, sender_id, receiver_id, time_sent, message, is_read) VALUES
                         (1, 'Abbott1234', 'Costello1234', '2000-02-12 11:00:00', 'C! How are you?', TRUE),
                         (2, 'Costello1234', 'Abbott1234', '2000-02-12 12:00:40', 'Hey A! Fine. You?', TRUE),
                         (3, 'Moe1234', 'Larry1234', '1995-02-12 11:00:00', 'How are you Larry?', TRUE),
@@ -327,7 +554,23 @@ def populate_tables_db2():
     rebuild_tables()
     create_user('DrMarvin', 'Marvin', 5855556656, 'drmarvin@rit.edu', '1991-05-16 00:00:00', None, None, None)
     create_user('Bob12345', 'Bob', 5855654534, 'bob@rit.edu', '1991-05-17 00:00:00', None, None, None)
-    create_message(1, 'Bob12345', 'DrMarvin', '1991-05-18 00:00:00', 'I\'m doing the work, I\'m baby-stepping')
+    create_direct_message(1, 'Bob12345', 'DrMarvin', '1991-05-18 00:00:00', 'I\'m doing the work, I\'m baby-stepping')
     change_username('Bob12345', 'BabySteps2Door', '1991-05-19 00:00:00')
     change_username('BabySteps2Door', 'BabySteps2Elevator', '1991-05-20 00:00:00')
 
+
+def populate_tables_db3():
+    rebuild_tables()
+    populate_tables_db1()
+    create_user('DrMarvin', 'Marvin', 5855556656, 'drmarvin@rit.edu', '1991-05-16 00:00:00', None, None, None)
+    create_user('Bob12345', 'Bob', 5855654534, 'bob@rit.edu', '1991-05-17 00:00:00', None, None, None)
+    add_community('Metropolis', ['DailyPlanet', 'Random'])
+    add_community('Comedy', ['ArgumentClinic', 'Dialogs'])
+    user_list = exec_get_all('SELECT user_id FROM users')
+    for user in user_list:
+        add_user_to_community(user[0], 'Comedy')
+    create_user('clarknotsuperman', 'Clark', 5855556434, 'clark@rit.edu', '1991-05-16 00:00:00', None, None, None)
+    create_user('lex12345', 'Lex', 5855556234, 'lex@rit.edu', '1991-05-16 00:00:00', None, None, None)
+    add_user_to_community('clarknotsuperman', 'Metropolis')
+    create_direct_message(8, 'lex12345', 'Moe1234', '1991-05-18 00:00:00', 'Hi Moe!')
+    create_direct_message(9, 'Moe1234', 'lex12345', '1991-05-18 00:00:10', 'Hi Lex!')
