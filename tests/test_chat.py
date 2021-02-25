@@ -94,7 +94,6 @@ class TestChat(unittest.TestCase):
         self.assertTrue(1 == reads, "Abbott has 1 read message")
         self.assertTrue(2 == unreads, "Abbott has 2 unread messages")
 
-
     def test_suspensions(self):
         """Test suspensions are correct"""
         print("Test that suspensions are in place correctly")
@@ -138,6 +137,7 @@ class TestChat(unittest.TestCase):
         self.assertTrue(len(message_list) == 0, "DrMarvin should have read his unread message")
 
     def test_unread_posts(self):
+        print("Test that posts are being sent and kept from being sent to channels correctly")
         populate_tables_db3()
         add_user_to_community('lex12345', 'Metropolis')
         post_to_channel('lex12345', 'DailyPlanet', 'Metropolis', "Hi guys!")
@@ -146,7 +146,6 @@ class TestChat(unittest.TestCase):
         post_to_channel('lex12345', 'DailyPlanet', 'Metropolis',
                         "Hey @clarknotsuperman are you here?")
         mentions, nummentions = get_mentions('clarknotsuperman')
-        print(mentions)
         self.assertTrue(nummentions == 1, "1 mention should have been found")
         post_to_channel('Moe1234', 'Dialogs', 'Comedy', "Hey @clarknotsuperman are you here?")
         mentions, nummentions = get_mentions('clarknotsuperman')

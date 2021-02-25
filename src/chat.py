@@ -255,8 +255,6 @@ def add_user_to_community(user_id, community):
         return "The user doesn't exist"
     exec_commit('INSERT INTO memberships (user_id,community_name) VALUES (%s,%s)',
                 (user_id, community))
-    print(user_id)
-    print(community)
     return user_id + " is now a member of " + community
 
 
@@ -569,7 +567,6 @@ def populate_tables_db3():
     add_community('Metropolis', ['DailyPlanet', 'Random'])
     add_community('Comedy', ['ArgumentClinic', 'Dialogs'])
     user_list = exec_get_all('SELECT user_id FROM users')
-    print(user_list)
     for user in user_list:
         add_user_to_community(user[0], 'Comedy')
     create_user('clarknotsuperman', 'Clark', 5855556434, 'clark@rit.edu', '1991-05-16 00:00:00', None, None, None)
