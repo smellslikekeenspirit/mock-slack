@@ -8,6 +8,10 @@ from src.swen344_db_utils import connect, exec_get_all, exec_commit
 
 
 def rebuild_tables():
+    """
+    drops tables if necessary and builds all the tables from scratch
+    :return:
+    """
     conn = connect()
     cur = conn.cursor()
     drop_users = """
